@@ -1,5 +1,13 @@
 <p align="center"><img src="docs/assets/banner.svg" alt="terminal-windows: a Windows desktop inside your terminal" width="900"></p>
 
+<p align="center">
+  <a href="https://github.com/Aneesh-Madupalli/terminal-windows/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/Aneesh-Madupalli/terminal-windows/actions/workflows/ci.yml/badge.svg"></a>
+  <a href="LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-blue.svg"></a>
+  <img alt="Language: Rust" src="https://img.shields.io/badge/language-Rust-orange.svg">
+  <img alt="Platform: Windows" src="https://img.shields.io/badge/platform-Windows%2010%20%7C%2011-0078d4.svg">
+  <img alt="Backends: Hyper-V and VirtualBox" src="https://img.shields.io/badge/backends-Hyper--V%20%7C%20VirtualBox-7aa2f7.svg">
+</p>
+
 # terminal-windows
 
 A real Windows PC in a virtual machine (Hyper-V or VirtualBox) that you, and your AI agents, can see and control from a terminal. Everything happens inside the VM; your own desktop is never touched.

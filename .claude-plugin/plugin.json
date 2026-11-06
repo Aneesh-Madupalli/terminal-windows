@@ -1,6 +1,6 @@
 {
   "name": "terminal-windows",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "description": "Computer use in a separate virtual Windows PC: screenshot, click, type and shortcut tools plus a skill for driving the guest. Requires the terminal-windows CLI on PATH.",
   "author": { "name": "terminal-windows contributors" },
   "license": "MIT",

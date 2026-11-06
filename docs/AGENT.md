@@ -23,14 +23,14 @@ Any agent with a skills folder: `terminal-windows skills install --dir PATH`. In
 
 ## Tools
 
-| Tool | Purpose |
-| ---- | ------- |
-| `status` | Is the VM running, and is the guest session `ready`, `locked`, `no-session` or `secure-desktop` |
-| `screenshot` | PNG of the guest. Every x and y you pass to other tools is a pixel in this image, origin at the top left |
-| `click` | Left or right click; `clicks: 2` double-clicks |
-| `move`, `drag`, `scroll` | Pointer movement, drag from one point to another, wheel (negative `dy` scrolls down) |
-| `type` | Literal text, sent as Unicode keyboard events (not through the clipboard) |
-| `key` | A key or chord: `return`, `tab`, `escape`, `win`, `win+r`, `ctrl+c`, `ctrl+shift+esc`, `alt+f4` |
+| Tool                     | Purpose                                                                                                  |
+| ------------------------ | -------------------------------------------------------------------------------------------------------- |
+| `status`                 | Is the VM running, and is the guest session `ready`, `locked`, `no-session` or `secure-desktop`          |
+| `screenshot`             | PNG of the guest. Every x and y you pass to other tools is a pixel in this image, origin at the top left |
+| `click`                  | Left or right click; `clicks: 2` double-clicks                                                           |
+| `move`, `drag`, `scroll` | Pointer movement, drag from one point to another, wheel (negative `dy` scrolls down)                     |
+| `type`                   | Literal text, sent as Unicode keyboard events (not through the clipboard)                                |
+| `key`                    | A key or chord: `return`, `tab`, `escape`, `win`, `win+r`, `ctrl+c`, `ctrl+shift+esc`, `alt+f4`          |
 
 There is no tool that runs a shell command. Anything that can be done in the guest is done by looking at the screen and using input, the same as a person would.
 
@@ -45,13 +45,13 @@ Prefer keyboard shortcuts to small click targets. To open an app: `key win`, `ty
 
 ## When to hand back to the user
 
-| What you see | Why | What to ask |
-| ------------ | --- | ----------- |
-| `locked` | The guest is at the lock screen | Sign in through `terminal-windows view` |
-| `secure-desktop` | A UAC prompt or the sign-in screen is showing; the agent cannot reach it | Approve the prompt in `terminal-windows view` |
-| `no-session` | Nobody is signed in to the guest | Sign in through `terminal-windows view` |
-| VM stopped or paused | | `terminal-windows start` or `resume` |
-| No VM yet | | `terminal-windows up --iso PATH` (once) |
+| What you see         | Why                                                                      | What to ask                                   |
+| -------------------- | ------------------------------------------------------------------------ | --------------------------------------------- |
+| `locked`             | The guest is at the lock screen                                          | Sign in through `terminal-windows view`       |
+| `secure-desktop`     | A UAC prompt or the sign-in screen is showing; the agent cannot reach it | Approve the prompt in `terminal-windows view` |
+| `no-session`         | Nobody is signed in to the guest                                         | Sign in through `terminal-windows view`       |
+| VM stopped or paused |                                                                          | `terminal-windows start` or `resume`          |
+| No VM yet            |                                                                          | `terminal-windows up --iso PATH` (once)       |
 
 `Ctrl+Alt+Delete` cannot be sent from inside the guest. The user can send it from the viewer: `Ctrl+G`, then `d`.
 

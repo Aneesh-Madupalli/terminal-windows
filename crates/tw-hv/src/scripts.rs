@@ -160,6 +160,13 @@ $true"#
         .into()
 }
 
+pub fn set_display() -> String {
+    with_vm(
+        "if ($vm.State -ne 'Off') { throw 'The VM must be stopped to change its display size' }\n\
+         Set-VMVideo -VM $vm -HorizontalResolution ([int]$p.width) -VerticalResolution ([int]$p.height) -ResolutionType Single\n$true",
+    )
+}
+
 pub fn remove() -> String {
     with_vm("if ($vm.State -ne 'Off') { Stop-VM -VM $vm -TurnOff -Force }\nRemove-VM -VM $vm -Force\n$true")
 }
@@ -229,6 +236,7 @@ pub fn all() -> Vec<(&'static str, String)> {
         ("checkpoint_remove", checkpoint_remove()),
         ("close_console", close_console()),
         ("remove", remove()),
+        ("set_display", set_display()),
         ("setup_host", setup_host()),
         ("host_info", host_info()),
     ]

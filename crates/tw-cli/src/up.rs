@@ -118,26 +118,67 @@ pub async fn ensure_running(env: &Env, machine: &Machine) -> Result<bool> {
     }
 }
 
-pub async fn up(env: &Env, rest: &[String]) -> Result<String> {
+const UP_FLAGS: [&str; 3] = ["plan", "no-view", "detach"];
+
+fn parse_up(rest: &[String]) -> Result<Arguments> {
     let mut flags = VM_FLAG_NAMES.to_vec();
-    flags.extend(["plan", "no-view"]);
-    let args = Arguments::parse(rest, &flags, VM_OPTION_NAMES)?;
+    flags.extend(UP_FLAGS);
+    Arguments::parse(rest, &flags, VM_OPTION_NAMES)
+}
+
+/// The machine to open in the viewer after `up`, or `None` when the options ask for no viewer.
+pub fn view_target(rest: &[String]) -> Option<String> {
+    let args = parse_up(rest).ok()?;
+    if UP_FLAGS.iter().any(|flag| args.flag(flag)) {
+        return None;
+    }
+    args.machine_name().ok()
+}
+
+fn up_json(machine: &Machine, state: &str) -> Result<String> {
+    let agent = machine.agent.as_ref().map(|a| serde_json::json!({ "version": a.version, "build": a.build }));
+    let value = serde_json::json!({
+        "name": machine.name,
+        "backend": machine.backend,
+        "state": state,
+        "os": machine.guest_version,
+        "agent": agent,
+    });
+    Ok(serde_json::to_string_pretty(&value)? + "\n")
+}
+
+pub async fn up(env: &Env, rest: &[String]) -> Result<String> {
+    let args = parse_up(rest)?;
+    let detach = args.flag("detach");
+    let json = detach || args.flag("no-view");
     let name = args.machine_name()?;
     let existing = load_optional(env, &name)?;
     if args.flag("plan") {
         return Ok(plan_text(&SetupPlan::new(&name, existing.as_ref())));
     }
-    let machine = match existing {
+    let (machine, ready) = match existing {
         Some(machine) if machine.installed => {
             let started = ensure_running(env, &machine).await?;
             if started {
                 env.say("Starting the VM");
             }
+            if detach {
+                return up_json(&machine, "starting");
+            }
             let values = wait_ready(env, &machine, env.timing.ready).await?;
-            remember_agent(env, machine, &values)?
+            (remember_agent(env, machine, &values)?, true)
         }
         other => install(env, &name, &args, other).await?,
     };
+    if json {
+        return up_json(&machine, if ready { "ready" } else { "installing" });
+    }
+    if !ready {
+        return Ok(format!(
+            "VM '{0}' is installing Windows in the background. Follow it with: terminal-windows status {0}\n",
+            machine.name
+        ));
+    }
     Ok(format!(
         "VM '{0}' is ready ({1}). Next: terminal-windows view {0}, or connect an agent with terminal-windows mcp {0}\n",
         machine.name,
@@ -201,7 +242,8 @@ fn load_or_create_password(env: &Env, machine: &Machine) -> Result<String> {
     Ok(password)
 }
 
-async fn install(env: &Env, name: &str, args: &Arguments, existing: Option<Machine>) -> Result<Machine> {
+/// Installs Windows and waits for the agent. The flag is false when `--detach` returned before the guest was ready.
+async fn install(env: &Env, name: &str, args: &Arguments, existing: Option<Machine>) -> Result<(Machine, bool)> {
     let iso = args
         .option("iso")
         .map(PathBuf::from)
@@ -295,6 +337,10 @@ async fn install(env: &Env, name: &str, args: &Arguments, existing: Option<Machi
         }
     }
 
+    if args.flag("detach") {
+        return Ok((machine, false));
+    }
+
     let values = wait_ready(env, &machine, env.timing.install).await?;
     hv.detach_dvds(&handle).await?;
     // The answer media holds the account password, so it does not stay on disk.
@@ -303,7 +349,7 @@ async fn install(env: &Env, name: &str, args: &Arguments, existing: Option<Machi
     machine.extra.remove("iso");
     machine.extra.remove("image_index");
     env.say("Windows is installed and the agent is running");
-    remember_agent(env, machine, &values)
+    Ok((remember_agent(env, machine, &values)?, true))
 }
 
 #[cfg(test)]
@@ -415,6 +461,44 @@ mod tests {
             "{text}"
         );
         assert!(h.hypervisors.iter().all(|hv| hv.calls().iter().all(|c| !c.starts_with("create"))));
+    }
+
+    #[tokio::test]
+    async fn no_view_prints_json_when_ready() {
+        let h = Harness::new();
+        let output =
+            up(&h.env, &strings(&["--iso", "C:\\w.iso", "--edition", "Windows 11 Pro", "--no-view"])).await.unwrap();
+        let json: serde_json::Value = serde_json::from_str(&output).unwrap();
+        assert_eq!((json["name"].as_str(), json["state"].as_str()), (Some("default"), Some("ready")));
+        assert_eq!(json["agent"]["build"], 1);
+    }
+
+    #[tokio::test]
+    async fn detach_returns_while_windows_installs_and_a_later_up_finishes() {
+        let h = Harness::new();
+        h.guest.script_unreachable(10_000);
+        let output =
+            up(&h.env, &strings(&["--iso", "C:\\w.iso", "--edition", "Windows 11 Pro", "--detach"])).await.unwrap();
+        let json: serde_json::Value = serde_json::from_str(&output).unwrap();
+        assert_eq!(json["state"], "installing");
+        assert!(!h.env.store.load("default").unwrap().installed);
+
+        h.guest.script_unreachable(0);
+        up(&h.env, &[]).await.unwrap();
+        assert!(h.env.store.load("default").unwrap().installed);
+
+        let again = up(&h.env, &strings(&["--detach"])).await.unwrap();
+        assert!(again.contains("\"starting\""), "{again}");
+    }
+
+    #[test]
+    fn the_viewer_opens_only_when_nothing_asks_for_none() {
+        assert_eq!(view_target(&[]), Some("default".into()));
+        assert_eq!(view_target(&strings(&["work", "--iso", "x.iso"])), Some("work".into()));
+        for flag in ["--no-view", "--detach", "--plan"] {
+            assert_eq!(view_target(&strings(&[flag])), None, "{flag}");
+        }
+        assert_eq!(view_target(&strings(&["--bogus"])), None);
     }
 
     #[tokio::test]

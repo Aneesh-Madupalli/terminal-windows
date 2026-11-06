@@ -1522,3 +1522,20 @@ Commands not in this version: `skills` and `display`. Use `screenshot` and the p
 | Console | `vmconnect` | `VirtualBoxVM.exe --startvm`; `hide` does nothing **[VERIFY: S8]** |
 
 The agent's guard accepts the SMBIOS signature `innotek GmbH` / `VirtualBox`. Spike S8 (needs VirtualBox 7): run `up`, then check that the NAT forward reaches the agent, that `EfiGraphicsResolution` gives 1280x800, and that `show` attaches a window to the headless VM.
+
+### 20.2 Added after the first release candidate
+
+| Area | Behaviour |
+| ---- | --------- |
+| `up --detach` | Starts the VM (and presses the boot key) and returns JSON with `state` of `installing` or `starting`; a later `up` continues |
+| `up --no-view` | Waits for readiness and prints JSON (`name`, `backend`, `state`, `os`, `agent`) |
+| `up` in a terminal | Opens the viewer once the guest is ready |
+| `skills get` / `skills install [--dir]` | Prints or copies the embedded `SKILL.md` to `<dir>\terminal-windows\SKILL.md` (default `~\.claude\skills`) |
+| `mcp --config` | Prints the client JSON for the machine |
+| `iso get` | Prints Microsoft's download pages; Windows ISOs are not downloaded automatically |
+| `display [--standard \| --hidpi \| --size WxH]` | Changes the guest display size of a stopped VM (1280x800, 2560x1600, or 800x600 up to 3840x2160). The guest UI scale is not changed. Hyper-V uses `Set-VMVideo`, VirtualBox `EfiGraphicsResolution` **[VERIFY: S9]** |
+| `snapshot` action | Alias of `screenshot`; there is no accessibility tree |
+| Ctrl+G palette | A box of 14 shortcuts (`d` Ctrl+Alt+Del, `o` VM window, `r` redraw, `q` quit, plus Windows shortcuts). Frames pause while it is open and the screen repaints when it closes |
+| Cell size | `--cell`, then the terminal's reply, then the console font (conhost only, not Windows Terminal), then 10x20 |
+
+Still open: Desktop Duplication capture, shared-memory frames, agent request deadlines and queue limits, code signing, and the live spikes S1 to S9.

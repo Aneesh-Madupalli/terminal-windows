@@ -3,6 +3,10 @@
 pub trait Terminal: Send + Sync {
     /// Columns and rows of the visible window.
     fn size(&self) -> (usize, usize);
+    /// The cell size in pixels when the operating system knows it.
+    fn cell_size(&self) -> Option<(f64, f64)> {
+        None
+    }
     fn write(&self, text: &str);
     /// Returns once the terminal has accepted the bytes, so a slow terminal slows rendering down.
     fn write_and_wait(&self, text: &str);
@@ -19,8 +23,9 @@ mod windows {
     use tw_core::{Error, Result};
     use tw_term::TerminalWriter;
     use windows_sys::Win32::System::Console::{
-        CONSOLE_MODE, CONSOLE_SCREEN_BUFFER_INFO, GetConsoleMode, GetConsoleScreenBufferInfo, GetStdHandle,
-        STD_INPUT_HANDLE, STD_OUTPUT_HANDLE, SetConsoleCP, SetConsoleMode, SetConsoleOutputCP,
+        CONSOLE_FONT_INFOEX, CONSOLE_MODE, CONSOLE_SCREEN_BUFFER_INFO, GetConsoleMode, GetConsoleScreenBufferInfo,
+        GetCurrentConsoleFontEx, GetStdHandle, STD_INPUT_HANDLE, STD_OUTPUT_HANDLE, SetConsoleCP, SetConsoleMode,
+        SetConsoleOutputCP,
     };
 
     use super::Terminal;
@@ -121,6 +126,24 @@ mod windows {
             let columns = (info.srWindow.Right - info.srWindow.Left + 1).max(1) as usize;
             let rows = (info.srWindow.Bottom - info.srWindow.Top + 1).max(1) as usize;
             (columns, rows)
+        }
+
+        fn cell_size(&self) -> Option<(f64, f64)> {
+            // Windows Terminal hosts a pseudo console whose font size is not the real cell size.
+            if std::env::var_os("WT_SESSION").is_some() {
+                return None;
+            }
+            // SAFETY: a zeroed structure with its size set is a valid out-parameter.
+            let font = unsafe {
+                let mut font: CONSOLE_FONT_INFOEX = std::mem::zeroed();
+                font.cbSize = std::mem::size_of::<CONSOLE_FONT_INFOEX>() as u32;
+                if GetCurrentConsoleFontEx(handle(STD_OUTPUT_HANDLE), 0, &mut font) == 0 {
+                    return None;
+                }
+                font
+            };
+            let (width, height) = (f64::from(font.dwFontSize.X), f64::from(font.dwFontSize.Y));
+            (width >= 4.0 && height >= 8.0).then_some((width, height))
         }
 
         fn write(&self, text: &str) {

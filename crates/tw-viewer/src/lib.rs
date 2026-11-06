@@ -2,6 +2,7 @@
 
 pub mod draw;
 pub mod mapping;
+pub mod palette;
 pub mod session;
 pub mod terminal;
 pub mod view;

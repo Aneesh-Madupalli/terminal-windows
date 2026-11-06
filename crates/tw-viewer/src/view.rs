@@ -12,6 +12,7 @@ use tw_term::{Bitmap, ImageLayout, Protocol, TerminalEvent, TerminalInput, Termi
 
 use crate::draw::{self, KittyIds, Link};
 use crate::mapping::{Geometry, MouseMapper, Request, key_request, text_request};
+use crate::palette::{self, Action};
 use crate::session::Session;
 use crate::terminal::Terminal;
 
@@ -55,6 +56,7 @@ struct Viewer {
     mapper: MouseMapper,
     ids: KittyIds,
     menu: bool,
+    redraw: bool,
     notice: String,
     size: (usize, usize),
     retry: Duration,
@@ -123,6 +125,13 @@ impl Viewer {
     }
 
     async fn on_frame(&mut self, frame: Frame) {
+        if self.menu {
+            // The palette is drawn over the picture, so frames wait until it closes.
+            if let Some(stream) = self.stream.as_mut() {
+                let _ = stream.ack(frame.seq).await;
+            }
+            return;
+        }
         let (columns, rows) = self.size;
         let Some(bitmap) =
             Bitmap::from_bgra(frame.width as usize, frame.height as usize, frame.width as usize * 4, &frame.bgra)
@@ -190,36 +199,61 @@ impl Viewer {
         self.draw_status();
     }
 
-    fn menu_key(&mut self, key: &str) -> Option<Exit> {
+    fn open_menu(&mut self) {
+        self.menu = true;
+        let (columns, rows) = self.size;
+        self.term.write(&palette::render(&self.options.theme, columns, rows));
+        self.draw_status();
+    }
+
+    fn close_menu(&mut self) {
         self.menu = false;
+        // The agent repaints the whole screen after a fresh subscription.
+        self.term.write("\x1b[2J");
+        self.redraw = true;
+        self.draw_status();
+    }
+
+    async fn apply_redraw(&mut self) {
+        if std::mem::take(&mut self.redraw) {
+            self.resubscribe().await;
+        }
+    }
+
+    fn menu_key(&mut self, key: &str) -> Option<Exit> {
+        self.close_menu();
+        let action = palette::find(key)?.action;
         let session = self.session.clone();
         let notices = self.notices.clone();
-        match key {
-            "d" => {
+        match action {
+            Action::Key(chord) => {
+                if let Some(request) = key_request(chord) {
+                    self.send(request);
+                }
+            }
+            Action::CtrlAltDel => {
                 tokio::spawn(async move {
                     let result = session.ctrl_alt_del().await.map(|()| String::new());
                     let _ = notices.send(result.unwrap_or_else(|e| session.explain(&e)));
                 });
             }
-            "o" => {
+            Action::Console => {
                 tokio::spawn(async move {
                     let result = session.open_console().await.map(|()| String::new());
                     let _ = notices.send(result.unwrap_or_else(|e| session.explain(&e)));
                 });
             }
-            "r" => {
+            Action::Redraw => {
                 self.geometry = None;
                 let cleared = self.ids.clear();
-                self.term.write(&format!("{cleared}\x1b[2J"));
-                // A fresh subscription makes the agent send the whole screen again.
+                self.term.write(&cleared);
                 self.retry = FIRST_RETRY;
                 self.stream = None;
+                self.redraw = false;
                 self.next_connect = Instant::now();
             }
-            "q" => return Some(Exit::Quit),
-            _ => {}
+            Action::Quit => return Some(Exit::Quit),
         }
-        self.draw_status();
         None
     }
 
@@ -243,8 +277,11 @@ impl Viewer {
                 TerminalEvent::Key(key) => {
                     flush(self, &mut text);
                     if key == "ctrl+g" {
-                        self.menu = !self.menu;
-                        self.draw_status();
+                        if self.menu {
+                            self.close_menu();
+                        } else {
+                            self.open_menu();
+                        }
                     } else if self.menu {
                         if let Some(exit) = self.menu_key(&key) {
                             return Some(exit);
@@ -309,7 +346,8 @@ pub async fn run(
     let protocol = options.protocol.unwrap_or_else(|| {
         capability::detect(&|key| std::env::var(key).ok(), Probe { kitty, sixel: filter.supports_sixel() })
     });
-    let cell = options.cell.or(filter.cell_width.zip(filter.cell_height)).unwrap_or(DEFAULT_CELL);
+    let cell =
+        options.cell.or(filter.cell_width.zip(filter.cell_height)).or_else(|| term.cell_size()).unwrap_or(DEFAULT_CELL);
 
     let (actions, mut action_queue) = unbounded_channel::<Request>();
     let (notices, mut notice_queue) = unbounded_channel::<String>();
@@ -341,6 +379,7 @@ pub async fn run(
         mapper: MouseMapper::default(),
         ids: KittyIds::default(),
         menu: false,
+        redraw: false,
         notice: String::new(),
         size,
         retry: FIRST_RETRY,
@@ -350,6 +389,7 @@ pub async fn run(
     viewer.draw_status();
 
     let mut exit = viewer.handle_events(early);
+    viewer.apply_redraw().await;
     let mut escape_deadline: Option<Instant> = None;
     let mut ticker = interval(Duration::from_millis(250));
     while exit.is_none() {
@@ -361,6 +401,7 @@ pub async fn run(
                 let events = parser.feed(&rest, false);
                 escape_deadline = (parser.pending() > 0).then(|| Instant::now() + ESCAPE_WAIT);
                 exit = viewer.handle_events(events);
+                viewer.apply_redraw().await;
             }
             frame = async {
                 match viewer.stream.as_mut() {
@@ -391,6 +432,7 @@ pub async fn run(
                 escape_deadline = None;
                 let events = parser.feed(&[], true);
                 exit = viewer.handle_events(events);
+                viewer.apply_redraw().await;
             }
             _ = ticker.tick() => viewer.check_resize().await,
             Some(notice) = notice_queue.recv() => viewer.explain_notice(notice),

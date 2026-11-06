@@ -1,0 +1,17 @@
+{
+  "name": "terminal-windows",
+  "owner": {
+    "name": "Aneesh-Madupalli",
+    "url": "https://github.com/Aneesh-Madupalli"
+  },
+  "metadata": {
+    "description": "Computer use in a separate virtual Windows PC for coding agents."
+  },
+  "plugins": [
+    {
+      "name": "terminal-windows",
+      "source": "./",
+      "description": "Computer use in a separate virtual Windows PC, with MCP tools and an agent skill."
+    }
+  ]
+}

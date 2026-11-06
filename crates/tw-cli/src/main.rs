@@ -16,6 +16,7 @@ async fn main() -> ExitCode {
 
 #[cfg(windows)]
 mod windows {
+    use std::io::IsTerminal;
     use std::path::PathBuf;
     use std::process::ExitCode;
     use std::sync::Arc;
@@ -103,8 +104,11 @@ mod windows {
     }
 
     async fn mcp(env: &Env, rest: &[String]) -> Result<String> {
-        let args = Arguments::parse(rest, &[], &[])?;
+        let args = Arguments::parse(rest, &["config"], &[])?;
         let name = args.machine_name()?;
+        if args.flag("config") {
+            return commands::mcp_config(&name);
+        }
         let server = McpServer::new(SharedGuest((env.guest)(&name)), "terminal-windows", tw_agent::VERSION);
         server
             .serve(tokio::io::BufReader::new(tokio::io::stdin()), tokio::io::stdout())
@@ -153,11 +157,24 @@ mod windows {
         }
     }
 
+    async fn up(env: &Env, args: &[String]) -> Result<String> {
+        let text = commands::run(env, args).await?;
+        let interactive = std::io::stdin().is_terminal() && std::io::stdout().is_terminal();
+        match tw_cli::up::view_target(&args[1..]) {
+            Some(name) if interactive => {
+                print!("{text}");
+                view(env, &[name]).await
+            }
+            _ => Ok(text),
+        }
+    }
+
     async fn dispatch(args: &[String]) -> Result<String> {
         match args.first().map(String::as_str) {
-            Some("view") => view(&build_env()?, &args[1..]).await,
             Some("setup-host") => setup_host(&args[1..]).await,
             Some("mcp") => mcp(&build_env()?, &args[1..]).await,
+            Some("view") => view(&build_env()?, &args[1..]).await,
+            Some("up") => up(&build_env()?, args).await,
             _ => commands::run(&build_env()?, args).await,
         }
     }

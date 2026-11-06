@@ -223,6 +223,10 @@ pub trait Hypervisor: Send + Sync {
     async fn close_console(&self, vm: &VmHandle) -> Result<()>;
     /// Deletes the VM registration. The caller deletes the files.
     async fn remove(&self, vm: &VmHandle) -> Result<()>;
+    /// Changes the guest display size. The VM must be off.
+    async fn set_display(&self, _vm: &VmHandle, _width: u32, _height: u32) -> Result<()> {
+        Err(Error::Prerequisite("This backend cannot change the display size".into()))
+    }
 }
 
 #[cfg(test)]

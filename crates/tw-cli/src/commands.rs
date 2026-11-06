@@ -22,15 +22,18 @@ Usage: terminal-windows <command> [name] [options]   (name defaults to 'default'
 Get started
   doctor                     Check this PC can run the virtual machine
   setup-host                 One-time elevated host setup (--enable-hyper-v to turn Hyper-V on)
+  iso get                    Where to download a Windows ISO
   iso check PATH             List the editions in a Windows ISO
   up [name] --iso PATH       Install Windows unattended and get it ready
                              Options: --edition NAME | --image-index N, --cpus N, --memory GiB, --disk GiB,
                              --width PX, --height PX, --locale en-US, --uac on|off, --offline, --plan,
-                             --backend hyperv|virtualbox (default: Hyper-V if ready, else VirtualBox)
+                             --backend hyperv|virtualbox (default: Hyper-V if ready, else VirtualBox),
+                             --detach (return while Windows installs), --no-view (print JSON, no viewer)
 
 Use it
   view [name]                Watch and control the guest in this terminal (Ctrl+G menu, Ctrl+] quits)
-  mcp [name]                 Serve the guest to an AI agent over MCP (stdio)
+  mcp [name] [--config]      Serve the guest to an AI agent over MCP (stdio); --config prints client JSON
+  skills get | install       Print or install the agent skill (--dir PATH)
   action ACTION [k=v ...]    Send one action (click x=10 y=20, type text=hi, key key=ctrl+c, ...) [--vm NAME] [--out FILE]
   screenshot [name]          Save a screenshot [--out FILE]
   logs [name]                Show the guest agent log [--lines N]
@@ -38,6 +41,7 @@ Use it
 Manage
   ls                         List virtual machines [--json]
   status [name]              State of one machine [--json]
+  display [name]             Show or change the guest display size (VM stopped): --standard | --hidpi | --size WxH
   start | stop | pause | resume [name]    (stop: --force)
   show | hide [name]         Open or close the Hyper-V console window
   checkpoint create|ls|restore|rm [LABEL] [--vm NAME]
@@ -58,6 +62,8 @@ pub async fn run(env: &Env, args: &[String]) -> Result<String> {
         }
         "doctor" => doctor(env, rest).await,
         "iso" => iso(env, rest).await,
+        "skills" => skills(rest),
+        "display" => display(env, rest).await,
         "up" => up::up(env, rest).await,
         "ls" => ls(env, rest).await,
         "status" => status(env, rest).await,
@@ -176,12 +182,23 @@ async fn vm_state(env: &Env, machine: &Machine) -> Result<VmState> {
     env.hv_for(machine)?.state(&handle(machine)).await
 }
 
+const ISO_USAGE: &str = "Usage: terminal-windows iso check PATH | iso get";
+
+const ISO_DOWNLOAD_HELP: &str = "Download a Windows ISO from Microsoft (free; no product key is needed to install):
+  Windows 11: https://www.microsoft.com/software-download/windows11
+  Windows 10: https://www.microsoft.com/software-download/windows10
+Pick the 64-bit (x64) multi-edition ISO, then check it with: terminal-windows iso check PATH
+";
+
 async fn iso(env: &Env, rest: &[String]) -> Result<String> {
     let Some((sub, rest)) = rest.split_first() else {
-        return Err(Error::Usage("Usage: terminal-windows iso check PATH".into()));
+        return Err(Error::Usage(ISO_USAGE.into()));
     };
+    if sub == "get" {
+        return Ok(ISO_DOWNLOAD_HELP.to_string());
+    }
     if sub != "check" {
-        return Err(Error::Usage("Usage: terminal-windows iso check PATH".into()));
+        return Err(Error::Usage(ISO_USAGE.into()));
     }
     let args = Arguments::parse(rest, &[], &["edition", "image-index"])?;
     let [path] = args.positionals.as_slice() else {
@@ -205,6 +222,52 @@ async fn iso(env: &Env, rest: &[String]) -> Result<String> {
         Err(error) => text.push_str(&format!("{error}\n")),
     }
     Ok(text)
+}
+
+const SKILL: &str = include_str!("../../../skills/terminal-windows/SKILL.md");
+
+/// `<home>\.claude\skills`, where Claude Code looks for personal skills.
+fn default_skills_dir() -> Result<PathBuf> {
+    let home = std::env::var_os("USERPROFILE")
+        .or_else(|| std::env::var_os("HOME"))
+        .ok_or_else(|| Error::Prerequisite("Cannot find your home folder. Use --dir PATH".into()))?;
+    Ok(PathBuf::from(home).join(".claude").join("skills"))
+}
+
+/// Checked-out files may have CRLF endings; the installed copy always uses LF.
+fn skill_text() -> String {
+    SKILL.replace("\r\n", "\n")
+}
+
+fn skills(rest: &[String]) -> Result<String> {
+    let usage = || Error::Usage("Usage: terminal-windows skills get | install [--dir PATH]".into());
+    let Some((sub, rest)) = rest.split_first() else { return Err(usage()) };
+    match sub.as_str() {
+        "get" => Ok(skill_text()),
+        "install" => {
+            let args = Arguments::parse(rest, &[], &["dir"])?;
+            let base = match args.option("dir") {
+                Some(dir) => PathBuf::from(dir),
+                None => default_skills_dir()?,
+            };
+            let folder = base.join("terminal-windows");
+            std::fs::create_dir_all(&folder)?;
+            std::fs::write(folder.join("SKILL.md"), skill_text())?;
+            Ok(format!("Installed the agent skill to {}\n", folder.join("SKILL.md").display()))
+        }
+        _ => Err(usage()),
+    }
+}
+
+/// The MCP server entry for clients that take a JSON config (Cursor, VS Code, Codex, ...).
+pub fn mcp_config(name: &str) -> Result<String> {
+    let (key, args) = if name == "default" {
+        ("terminal-windows".to_string(), vec!["mcp".to_string()])
+    } else {
+        (format!("terminal-windows-{name}"), vec!["mcp".to_string(), name.to_string()])
+    };
+    let config = json!({ "mcpServers": { key: { "command": "terminal-windows", "args": args } } });
+    Ok(serde_json::to_string_pretty(&config)? + "\n")
 }
 
 async fn ls(env: &Env, rest: &[String]) -> Result<String> {
@@ -232,6 +295,42 @@ async fn ls(env: &Env, rest: &[String]) -> Result<String> {
         text.push_str(&format!("{:<15} {state:<10} {installed:<10} {:<4} {memory:<7} {disk}\n", m.name, m.cpu));
     }
     Ok(text)
+}
+
+fn parse_size(text: &str) -> Result<(u32, u32)> {
+    let parsed = text.split_once('x').and_then(|(w, h)| Some((w.parse::<u32>().ok()?, h.parse::<u32>().ok()?)));
+    match parsed {
+        Some((w, h)) if (800..=3840).contains(&w) && (600..=2160).contains(&h) => Ok((w, h)),
+        _ => Err(Error::Usage("--size must look like 1920x1080 (800x600 up to 3840x2160)".into())),
+    }
+}
+
+async fn display(env: &Env, rest: &[String]) -> Result<String> {
+    let (args, name) = machine_args(rest, &["standard", "hidpi"], &["size"])?;
+    let mut machine = load(env, &name)?;
+    let requested = [args.flag("standard"), args.flag("hidpi"), args.option("size").is_some()];
+    if requested.iter().filter(|r| **r).count() > 1 {
+        return Err(Error::Usage("Choose one of --standard, --hidpi or --size WxH".into()));
+    }
+    let size = if args.flag("standard") {
+        Some((1280, 800))
+    } else if args.flag("hidpi") {
+        Some((2560, 1600))
+    } else {
+        args.option("size").map(parse_size).transpose()?
+    };
+    let Some((width, height)) = size else {
+        return Ok(format!("{name}: {}x{}\n", machine.width, machine.height));
+    };
+    let hv = env.hv_for(&machine)?;
+    if hv.state(&handle(&machine)).await? != VmState::Off {
+        return Err(Error::Other(format!("Stop '{name}' first: terminal-windows stop {name}")));
+    }
+    hv.set_display(&handle(&machine), width, height).await?;
+    machine.width = width;
+    machine.height = height;
+    env.store.save(&machine)?;
+    Ok(format!("Display set to {width}x{height}. It applies the next time '{name}' starts.\n"))
 }
 
 async fn status(env: &Env, rest: &[String]) -> Result<String> {
@@ -555,6 +654,63 @@ mod tests {
         assert_eq!(json["ready"], true);
         assert_eq!(json["backends"][0]["ready"], false);
         assert_eq!(json["backends"][1]["ready"], true);
+    }
+
+    #[tokio::test]
+    async fn the_display_size_is_shown_and_changed_only_on_a_stopped_vm() {
+        let h = installed().await;
+        assert_eq!(run(&h.env, &strings(&["display"])).await.unwrap(), "default: 1280x800\n");
+        let running = run(&h.env, &strings(&["display", "--hidpi"])).await.unwrap_err();
+        assert!(running.to_string().contains("Stop 'default' first"), "{running}");
+        run(&h.env, &strings(&["stop", "--force"])).await.unwrap();
+        run(&h.env, &strings(&["display", "--hidpi"])).await.unwrap();
+        assert_eq!(h.env.store.load("default").unwrap().width, 2560);
+        let vm = VmHandle::new(h.env.store.load("default").unwrap().hv_name);
+        assert_eq!(h.hv.display(&vm), Some((2560, 1600)));
+        run(&h.env, &strings(&["display", "--size", "1920x1080"])).await.unwrap();
+        assert_eq!(run(&h.env, &strings(&["display"])).await.unwrap(), "default: 1920x1080\n");
+        run(&h.env, &strings(&["display", "--standard"])).await.unwrap();
+        assert_eq!(h.env.store.load("default").unwrap().height, 800);
+    }
+
+    #[tokio::test]
+    async fn bad_display_requests_are_usage_errors() {
+        let h = installed().await;
+        run(&h.env, &strings(&["stop", "--force"])).await.unwrap();
+        for args in
+            [&["display", "--size", "10x10"][..], &["display", "--size", "big"], &["display", "--hidpi", "--standard"]]
+        {
+            assert_eq!(run(&h.env, &strings(args)).await.unwrap_err().exit_code(), 2, "{args:?}");
+        }
+    }
+
+    #[tokio::test]
+    async fn skills_are_printed_and_installed() {
+        let h = Harness::new();
+        let text = run(&h.env, &strings(&["skills", "get"])).await.unwrap();
+        assert!(text.starts_with("---\nname: terminal-windows"), "{text}");
+        let dir = h.dir.path().join("skills");
+        let done = run(&h.env, &strings(&["skills", "install", "--dir", dir.to_str().unwrap()])).await.unwrap();
+        assert!(done.contains("SKILL.md"));
+        assert_eq!(std::fs::read_to_string(dir.join("terminal-windows").join("SKILL.md")).unwrap(), text);
+        assert!(run(&h.env, &strings(&["skills"])).await.is_err());
+        assert!(run(&h.env, &strings(&["skills", "bogus"])).await.is_err());
+    }
+
+    #[test]
+    fn mcp_config_names_the_machine_when_it_is_not_the_default() {
+        let default: serde_json::Value = serde_json::from_str(&mcp_config("default").unwrap()).unwrap();
+        assert_eq!(default["mcpServers"]["terminal-windows"]["args"], json!(["mcp"]));
+        let work: serde_json::Value = serde_json::from_str(&mcp_config("work").unwrap()).unwrap();
+        assert_eq!(work["mcpServers"]["terminal-windows-work"]["args"], json!(["mcp", "work"]));
+        assert_eq!(work["mcpServers"]["terminal-windows-work"]["command"], "terminal-windows");
+    }
+
+    #[tokio::test]
+    async fn iso_get_points_at_microsoft() {
+        let h = Harness::new();
+        let text = run(&h.env, &strings(&["iso", "get"])).await.unwrap();
+        assert!(text.contains("microsoft.com/software-download/windows11") && text.contains("iso check"));
     }
 
     #[tokio::test]

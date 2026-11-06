@@ -73,10 +73,7 @@ pub fn status_bar(bar: &Bar) -> String {
     };
     let mut spans = vec![Span::new(format!(" {dot} "), colour), Span::new(format!(" {} ", bar.name), theme.badge())];
     if bar.menu {
-        for (key, label) in [("d", "Ctrl+Alt+Del"), ("o", "Hyper-V console"), ("r", "redraw"), ("q", "quit")] {
-            spans.push(Span::new(format!(" {key} "), theme.key()));
-            spans.push(Span::new(format!(" {label} "), theme.muted()));
-        }
+        spans.push(Span::new(" Press a key from the list ".to_string(), theme.muted()));
         spans.push(Span::new(" Esc closes ".to_string(), theme.faint()));
     } else {
         spans.push(Span::new(format!(" {} ", bar.protocol.name()), theme.faint()));
@@ -138,6 +135,6 @@ mod tests {
         assert!(status_bar(&bar(&theme, Link::Lost, "", false)).contains("reconnecting"));
         assert!(status_bar(&bar(&theme, Link::Live, "The guest is locked", false)).contains("locked"));
         let menu = status_bar(&bar(&theme, Link::Live, "", true));
-        assert!(menu.contains("Ctrl+Alt+Del") && menu.contains("Hyper-V console") && menu.contains("quit"), "{menu}");
+        assert!(menu.contains("Press a key") && menu.contains("Esc closes"), "{menu}");
     }
 }

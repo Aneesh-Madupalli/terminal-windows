@@ -499,6 +499,14 @@ impl Hypervisor for VirtualBox {
         Ok(())
     }
 
+    async fn set_display(&self, vm: &VmHandle, width: u32, height: u32) -> Result<()> {
+        if !self.is_off(vm).await? {
+            return Err(Error::Other("The VM must be stopped to change its display size".into()));
+        }
+        let resolution = format!("{width}x{height}");
+        self.vbox(&["setextradata", &vm.hv_name, "VBoxInternal2/EfiGraphicsResolution", &resolution]).await.map(drop)
+    }
+
     async fn remove(&self, vm: &VmHandle) -> Result<()> {
         self.vbox(&["unregistervm", &vm.hv_name, "--delete"]).await.map(drop)
     }
@@ -762,6 +770,17 @@ mod tests {
         vb.stop(&vm, StopMode::Force).await.unwrap();
         vb.remove(&vm).await.unwrap();
         assert!(vb.state(&vm).await.is_err());
+    }
+
+    #[tokio::test]
+    async fn the_display_size_can_only_change_while_the_vm_is_off() {
+        let (vb, sim) = backend(Simulator::default());
+        let vm = created(&vb).await;
+        vb.set_display(&vm, 2560, 1600).await.unwrap();
+        let calls = sim.calls.lock().unwrap().clone();
+        assert!(calls.iter().any(|c| c[0] == "setextradata" && c.contains(&"2560x1600".to_string())));
+        vb.start(&vm).await.unwrap();
+        assert!(vb.set_display(&vm, 1280, 800).await.is_err());
     }
 
     #[tokio::test]

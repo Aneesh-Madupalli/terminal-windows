@@ -89,7 +89,9 @@ terminal-windows view
 
 ## Commands
 
-Run `terminal-windows help`. The main ones: `doctor`, `setup-host`, `iso check`, `up`, `view`, `mcp`, `action`, `screenshot`, `logs`, `ls`, `status`, `start`, `stop`, `pause`, `resume`, `show`, `hide`, `checkpoint`, `credential show`, `agent update`, `rm`.
+Run `terminal-windows help`. The main ones: `doctor`, `setup-host`, `iso get`, `iso check`, `up` (`--detach`, `--no-view`, `--plan`), `view`, `mcp` (`--config`), `skills`, `action`, `screenshot`, `logs`, `ls`, `status`, `display`, `start`, `stop`, `pause`, `resume`, `show`, `hide`, `checkpoint`, `credential show`, `agent update`, `rm`.
+
+After `up` finishes, the viewer opens by itself when you run it in a terminal. `--no-view` prints a JSON summary instead, and `--detach` returns while Windows installs. In the viewer, `Ctrl+G` opens a shortcut palette (Start, Run, Explorer, Task Manager, Alt+Tab, Ctrl+Alt+Del and more) and `Ctrl+]` quits.
 
 Exit codes: 0 success, 1 failure, 2 usage, 3 prerequisite missing, 4 no such VM, 5 VM not running, 6 guest not ready, 7 access denied, 8 guest locked.
 
@@ -120,7 +122,7 @@ Add the MCP server to your client (the Claude plugin manifest is in `.claude-plu
 | `tw-term`, `tw-viewer`     | Terminal graphics, input and the viewer                                            |
 | `tw-cli`                   | The `terminal-windows` command                                                     |
 
-Design documents: `docs\PRD.md`, `docs\TDD.md`, `docs\VALIDATION.md`.
+Design documents: `docs\PRD.md`, `docs\TDD.md`, `docs\VALIDATION.md`. Agent guide: `docs\AGENT.md`. Release steps: `RELEASING.md`.
 
 ## Status
 

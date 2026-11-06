@@ -22,6 +22,7 @@ struct FakeVm {
     keys: Vec<HostKey>,
     typed: String,
     console_open: bool,
+    display: Option<(u32, u32)>,
 }
 
 #[derive(Debug, Default)]
@@ -101,6 +102,10 @@ impl FakeHypervisor {
         self.inner.lock().unwrap().vms.get(&vm.hv_name).and_then(|v| v.boot_dvd.clone())
     }
 
+    pub fn display(&self, vm: &VmHandle) -> Option<(u32, u32)> {
+        self.inner.lock().unwrap().vms.get(&vm.hv_name).and_then(|v| v.display)
+    }
+
     pub fn console_open(&self, vm: &VmHandle) -> bool {
         self.inner.lock().unwrap().vms.get(&vm.hv_name).is_some_and(|v| v.console_open)
     }
@@ -149,6 +154,7 @@ impl Hypervisor for FakeHypervisor {
                 keys: Vec::new(),
                 typed: String::new(),
                 console_open: false,
+                display: None,
             },
         );
         Ok(Created { handle: VmHandle::new(&spec.hv_name), vm_id: id, warning: None })
@@ -309,6 +315,16 @@ impl Hypervisor for FakeHypervisor {
     async fn close_console(&self, vm: &VmHandle) -> Result<()> {
         self.with_vm("close_console", vm, |v| {
             v.console_open = false;
+            Ok(())
+        })
+    }
+
+    async fn set_display(&self, vm: &VmHandle, width: u32, height: u32) -> Result<()> {
+        self.with_vm("set_display", vm, |v| {
+            if v.state != VmState::Off {
+                return Err(Error::Other("The VM must be stopped to change its display size".into()));
+            }
+            v.display = Some((width, height));
             Ok(())
         })
     }

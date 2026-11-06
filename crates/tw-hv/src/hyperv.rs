@@ -184,6 +184,10 @@ impl Hypervisor for HyperV {
         self.run_ok(&scripts::close_console(), json!({ "hvName": vm.hv_name })).await
     }
 
+    async fn set_display(&self, vm: &VmHandle, width: u32, height: u32) -> Result<()> {
+        self.run_ok(&scripts::set_display(), json!({ "hvName": vm.hv_name, "width": width, "height": height })).await
+    }
+
     async fn remove(&self, vm: &VmHandle) -> Result<()> {
         self.run_ok(&scripts::remove(), json!({ "hvName": vm.hv_name })).await
     }

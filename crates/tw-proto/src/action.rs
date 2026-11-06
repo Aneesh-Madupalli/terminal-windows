@@ -102,7 +102,8 @@ pub fn parse_action(
         "ping" => Action::Ping,
         "status" => Action::Status,
         "unsubscribe" => Action::Unsubscribe,
-        "screenshot" => {
+        // `snapshot` is terminal-mac's name for the same thing; there is no accessibility tree.
+        "screenshot" | "snapshot" => {
             if let Some(format) = r.raw("format") {
                 if format != "png" {
                     return Err(bad("format must be png"));
@@ -204,6 +205,7 @@ mod tests {
         assert_eq!(parse("status", &[]).unwrap(), Action::Status);
         assert_eq!(parse("screenshot", &[("format", "png")]).unwrap(), Action::Screenshot);
         assert!(parse("screenshot", &[("format", "jpg")]).is_err());
+        assert_eq!(parse("snapshot", &[]).unwrap(), Action::Screenshot);
         assert!(parse("ping", &[("x", "1")]).is_err(), "unknown arguments are rejected");
         assert!(parse("bogus", &[]).is_err());
     }

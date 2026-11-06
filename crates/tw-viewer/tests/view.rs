@@ -66,7 +66,19 @@ async fn agent(cut_after: Option<u32>) -> (SocketAddr, Arc<AtomicU32>) {
                     if framed.write(&header, &compress(&pixels)).await.is_err() {
                         return;
                     }
-                    tokio::time::sleep(Duration::from_millis(15)).await;
+                    // Between frames the agent answers any request, such as a second subscribe.
+                    match tokio::time::timeout(Duration::from_millis(15), framed.read(Limits::AUTHENTICATED)).await {
+                        Ok(Ok(message)) => {
+                            if let Header::Req { id, .. } = message.header {
+                                let reply = Header::Rep { id, ok: true, values: BTreeMap::new(), error: None };
+                                if framed.write(&reply, &[]).await.is_err() {
+                                    return;
+                                }
+                            }
+                        }
+                        Ok(Err(_)) => return,
+                        Err(_) => {}
+                    }
                 }
             });
         }
@@ -127,11 +139,12 @@ impl Session for FakeSession {
 
 struct FakeTerminal {
     output: Mutex<String>,
+    cell: Option<(f64, f64)>,
 }
 
 impl FakeTerminal {
-    fn new() -> Arc<Self> {
-        Arc::new(Self { output: Mutex::new(String::new()) })
+    fn new(cell: Option<(f64, f64)>) -> Arc<Self> {
+        Arc::new(Self { output: Mutex::new(String::new()), cell })
     }
 
     fn output(&self) -> String {
@@ -142,6 +155,10 @@ impl FakeTerminal {
 impl Terminal for FakeTerminal {
     fn size(&self) -> (usize, usize) {
         (40, 11)
+    }
+
+    fn cell_size(&self) -> Option<(f64, f64)> {
+        self.cell
     }
 
     fn write(&self, text: &str) {
@@ -171,10 +188,13 @@ struct Run {
 }
 
 fn start(address: Option<SocketAddr>) -> Run {
+    start_with(address, FakeTerminal::new(None), options())
+}
+
+fn start_with(address: Option<SocketAddr>, term: Arc<FakeTerminal>, options: Options) -> Run {
     let (input, receiver) = unbounded_channel();
-    let term = FakeTerminal::new();
     let session = FakeSession::new(address);
-    let task = tokio::spawn(run(session.clone(), term.clone(), receiver, options()));
+    let task = tokio::spawn(run(session.clone(), term.clone(), receiver, options));
     Run { input, term, session, task }
 }
 
@@ -288,4 +308,49 @@ async fn closed_input_ends_the_view() {
     until("the first frame", || run.term.output().contains('\u{2580}')).await;
     drop(run.input);
     assert_eq!(tokio::time::timeout(WAIT, run.task).await.unwrap().unwrap(), Exit::InputClosed);
+}
+
+#[tokio::test]
+async fn windows_shortcuts_from_the_palette_are_sent_to_the_guest() {
+    let (address, _) = agent(None).await;
+    let run = start(Some(address));
+    until("the first frame", || run.term.output().contains('\u{2580}')).await;
+    run.input.send(vec![0x07]).unwrap();
+    until("the palette", || run.term.output().contains("Shortcuts")).await;
+    run.input.send(b"t".to_vec()).unwrap();
+    until("the shortcut", || run.session.calls().iter().any(|(a, _)| a == "key")).await;
+    let key = run.session.calls().into_iter().find(|(a, _)| a == "key").unwrap().1;
+    assert_eq!(key["key"], "ctrl+shift+esc");
+    run.input.send(vec![0x1d]).unwrap();
+    run.finish().await;
+}
+
+#[tokio::test]
+async fn the_picture_comes_back_after_the_palette_closes() {
+    let (address, _) = agent(None).await;
+    let run = start(Some(address));
+    until("the first frame", || run.term.output().contains('\u{2580}')).await;
+    run.input.send(vec![0x07]).unwrap();
+    until("the palette", || run.term.output().contains("Shortcuts")).await;
+    run.input.send(vec![0x07]).unwrap();
+    let before = run.term.output().len();
+    until("a repaint after closing", || run.term.output()[before..].contains('\u{2580}')).await;
+    assert!(run.session.calls().is_empty(), "closing the palette sends nothing to the guest");
+    run.input.send(vec![0x1d]).unwrap();
+    run.finish().await;
+}
+
+#[tokio::test]
+async fn the_cell_size_comes_from_the_terminal_when_nothing_forces_it() {
+    let (address, _) = agent(None).await;
+    let options = Options { cell: None, ..options() };
+    let run = start_with(Some(address), FakeTerminal::new(Some((8.0, 16.0))), options);
+    until("the first frame", || run.term.output().contains('\u{2580}')).await;
+    run.input.send(b"\x1b[<0;20;5M\x1b[<0;20;5m".to_vec()).unwrap();
+    until("the click", || run.session.calls().iter().any(|(a, _)| a == "click")).await;
+    let click = run.session.calls().into_iter().find(|(a, _)| a == "click").unwrap().1;
+    let (x, y): (u32, u32) = (click["x"].parse().unwrap(), click["y"].parse().unwrap());
+    assert!(x > 300 && x < 1280 && y < 640, "({x}, {y})");
+    run.input.send(vec![0x1d]).unwrap();
+    run.finish().await;
 }

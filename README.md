@@ -39,7 +39,7 @@ flowchart LR
 ## What `up` does
 
 ```mermaid
-flowchart TD
+flowchart LR
   A["doctor: pick a backend<br/>Hyper-V if ready, else VirtualBox"] --> B["Check the Windows ISO<br/>choose the edition"]
   B --> C["Create the VM, secret and guest password"]
   C --> D["Build the answer ISO<br/>(unattended setup + agent)"]

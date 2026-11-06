@@ -25,7 +25,7 @@ try {
   if ($LASTEXITCODE -ne 0 -or $version -notmatch '^terminal-windows \d+\.\d+\.\d+') { throw "Unexpected version output: $version" }
 
   $help = (& $cli help) -join "`n"
-  if ($help -notmatch 'terminal-windows up') { throw 'help does not describe the up command' }
+  if ($help -notmatch 'up \[name\]') { throw 'help does not describe the up command' }
 
   $skill = (& $cli skills get) -join "`n"
   if ($skill -notmatch '(?m)^name: terminal-windows') { throw 'skills get did not print the skill' }

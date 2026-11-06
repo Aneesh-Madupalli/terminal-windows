@@ -1,0 +1,36 @@
+[package]
+name = "tw-cli"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[lib]
+name = "tw_cli"
+
+[[bin]]
+name = "terminal-windows"
+path = "src/main.rs"
+
+[dependencies]
+tw-core.workspace = true
+tw-proto.workspace = true
+tw-transport.workspace = true
+tw-client.workspace = true
+tw-hv.workspace = true
+tw-provision.workspace = true
+tw-mcp.workspace = true
+tw-agent.workspace = true
+tw-term.workspace = true
+tw-viewer.workspace = true
+tokio.workspace = true
+serde_json.workspace = true
+async-trait.workspace = true
+sha2.workspace = true
+uuid.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true
+
+[lints]
+workspace = true

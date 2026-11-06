@@ -1,0 +1,44 @@
+[workspace]
+resolver = "3"
+members = ["crates/tw-core", "crates/tw-proto", "crates/tw-transport", "crates/tw-client", "crates/tw-hv", "crates/tw-term", "crates/tw-mcp", "crates/tw-provision", "crates/tw-agent", "crates/tw-cli", "crates/tw-viewer"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.85"
+publish = false
+
+[workspace.dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+thiserror = "2"
+uuid = { version = "1", features = ["v4", "serde"] }
+hmac = "0.12"
+sha2 = "0.10"
+getrandom = "0.3"
+base64 = "0.22"
+tempfile = "3"
+tokio = { version = "1", features = ["net", "io-util", "time", "rt", "rt-multi-thread", "sync", "macros", "process", "io-std"] }
+async-trait = "0.1"
+lz4_flex = "0.14"
+png = "0.18"
+windows-sys = "0.61"
+jpeg-encoder = "0.7"
+
+tw-core = { path = "crates/tw-core" }
+tw-proto = { path = "crates/tw-proto" }
+tw-transport = { path = "crates/tw-transport" }
+tw-client = { path = "crates/tw-client" }
+tw-hv = { path = "crates/tw-hv" }
+tw-term = { path = "crates/tw-term" }
+tw-mcp = { path = "crates/tw-mcp" }
+tw-provision = { path = "crates/tw-provision" }
+tw-agent = { path = "crates/tw-agent" }
+tw-cli = { path = "crates/tw-cli" }
+tw-viewer = { path = "crates/tw-viewer" }
+
+[workspace.lints.rust]
+unsafe_op_in_unsafe_fn = "deny"
+
+[workspace.lints.clippy]
+all = { level = "warn", priority = -1 }

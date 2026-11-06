@@ -1,0 +1,22 @@
+[package]
+name = "tw-client"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[dependencies]
+tw-core.workspace = true
+tw-hv.workspace = true
+tw-proto.workspace = true
+tw-transport.workspace = true
+tokio.workspace = true
+uuid.workspace = true
+thiserror.workspace = true
+async-trait.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true
+
+[lints]
+workspace = true

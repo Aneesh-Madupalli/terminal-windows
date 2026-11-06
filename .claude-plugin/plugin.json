@@ -1,0 +1,11 @@
+{
+  "name": "terminal-windows",
+  "version": "0.1.0",
+  "description": "Computer use in a separate virtual Windows PC: screenshot, click, type and shortcut tools plus a skill for driving the guest. Requires the terminal-windows CLI on PATH.",
+  "author": { "name": "terminal-windows contributors" },
+  "license": "MIT",
+  "keywords": ["computer-use", "windows", "hyper-v", "virtual-machine", "mcp"],
+  "mcpServers": {
+    "terminal-windows": { "command": "terminal-windows", "args": ["mcp"] }
+  }
+}

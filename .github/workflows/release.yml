@@ -22,4 +22,6 @@ jobs:
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release create "${{ github.ref_name }}" dist/*.zip dist/*.sha256 --title "${{ github.ref_name }}" --generate-notes
+        run: |
+          $notes = "Early release: the code is built and tested on Windows, but the Hyper-V and VirtualBox paths have not been run end to end on real hypervisors yet. Install with scripts/install.ps1 from the zip, then run ``terminal-windows doctor``."
+          gh release create "${{ github.ref_name }}" dist/*.zip dist/*.sha256 --title "terminal-windows ${{ github.ref_name }}" --notes $notes --generate-notes --prerelease

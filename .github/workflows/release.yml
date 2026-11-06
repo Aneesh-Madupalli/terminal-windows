@@ -18,6 +18,9 @@ jobs:
       - name: Package
         shell: pwsh
         run: ./scripts/build.ps1
+      - name: Verify the package
+        shell: pwsh
+        run: ./scripts/test-package.ps1
       - name: Publish release
         shell: pwsh
         env:

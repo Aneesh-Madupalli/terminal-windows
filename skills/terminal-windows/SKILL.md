@@ -1,11 +1,11 @@
 ---
 name: terminal-windows
-description: Operate a separate virtual Windows PC (a Hyper-V VM) with screenshots, clicks, typing and shortcuts, without touching the user's own desktop. Use when a task needs a real Windows GUI: testing a Windows app, using a website or desktop app, or any computer-use task the user wants sandboxed.
+description: Operate a separate virtual Windows PC (Hyper-V or VirtualBox) with screenshots, clicks, typing and shortcuts, without touching the user's own desktop. Use when a task needs a real Windows GUI: testing a Windows app, using a website or desktop app, or any computer-use task the user wants sandboxed.
 ---
 
 # terminal-windows
 
-`terminal-windows` runs a real Windows guest in Hyper-V. A helper inside the guest captures its screen and posts input, so everything you do happens in the VM. It never controls the user's own desktop.
+`terminal-windows` runs a real Windows guest in a virtual machine (Hyper-V, or VirtualBox on Windows Home). A helper inside the guest captures its screen and posts input, so everything you do happens in the VM. It never controls the user's own desktop.
 
 ## Prefer the MCP tools
 

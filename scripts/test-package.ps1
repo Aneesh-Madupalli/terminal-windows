@@ -9,6 +9,13 @@ $root = Split-Path -Parent $PSScriptRoot
 $zip = Get-ChildItem (Join-Path $root 'dist') -Filter 'terminal-windows-*-x64.zip' | Select-Object -First 1
 if (-not $zip) { throw 'No zip in dist\. Run scripts\build.ps1 first.' }
 
+if ($env:GITHUB_REF_NAME -and $env:GITHUB_REF_NAME -match '^v(.+)$') {
+  $tagVersion = $Matches[1]
+  if ($zip.Name -notlike "terminal-windows-$tagVersion-*") {
+    throw "The package version ($($zip.Name)) does not match tag $env:GITHUB_REF_NAME. Bump [workspace.package] version in Cargo.toml before tagging."
+  }
+}
+
 $expected = ((Get-Content "$($zip.FullName).sha256" -Raw) -split '\s+')[0].ToLower()
 $actual = (Get-FileHash $zip.FullName -Algorithm SHA256).Hash.ToLower()
 if ($expected -ne $actual) { throw "SHA-256 mismatch: expected $expected, got $actual" }

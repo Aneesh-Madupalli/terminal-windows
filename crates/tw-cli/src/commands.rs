@@ -608,7 +608,7 @@ mod tests {
     async fn help_and_version_and_unknown_commands() {
         let h = Harness::new();
         assert!(run(&h.env, &[]).await.unwrap().contains("Usage"));
-        assert!(run(&h.env, &strings(&["version"])).await.unwrap().starts_with("terminal-windows 0.1.0"));
+        assert!(run(&h.env, &strings(&["version"])).await.unwrap().starts_with("terminal-windows 0.1.2"));
         let error = run(&h.env, &strings(&["frobnicate"])).await.unwrap_err();
         assert_eq!(error.exit_code(), 2);
     }
